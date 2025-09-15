@@ -5,11 +5,9 @@ https://www.youtube.com/watch?v=c-QsfbznSXI&t=3024s
 
 https://github.com/techwithtim/Django-React-Full-Stack-App
 
-Deployment of Django-React Note app to Choreo.com
-
 I used Abacus.ai to help solve issues with my development environment (VSCode), backend local development, and frontend local development.
 
-I also used Abacus.ai to help solve deployment issues I had with Choreo.com using the "DEV" (free trial) tier.
+I also used Abacus.ai to help solve deployment issues I had with Choreo using the "DEV" (free trial) tier.
 
 I had more development challenges getting the frontend to work with the backend without errors, and getting the backend and front end components to build correctly on Choreo.
 
