@@ -1,0 +1,21 @@
+schemaVersion: 1.2
+name: frontend
+description: React Frontend (Vite)
+language: node
+version: "18"
+
+build:
+  preset: nodejs
+  commands:
+    - yarn install --frozen-lockfile
+    - yarn build
+
+run:
+  # Use Vite preview to serve the production build
+  command: yarn preview --host 0.0.0.0 --port 3000
+
+endpoints:
+  - name: http
+    port: 3000
+    type: HTTP
+    context: /
