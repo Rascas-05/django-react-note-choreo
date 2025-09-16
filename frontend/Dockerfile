@@ -1,13 +1,22 @@
-# Builder stage
-FROM node:20-alpine AS builder
-WORKDIR /app
-COPY frontend/package.json frontend/yarn.lock ./
-RUN yarn install --frozen-lockfile
-COPY frontend/ .
-RUN yarn build
+###############################
+# Frontend (Vite + React)
+###############################
+FROM node:22-alpine AS frontend-builder
 
-# Nginx stage
-FROM nginxinc/nginx-unprivileged:stable-alpine-slim
-COPY --from=builder /app/dist /usr/share/nginx/html
-EXPOSE 8080
-CMD ["nginx", "-g", "daemon off;"]
+# Set working dir
+WORKDIR /app/frontend
+
+# Copy only package files first (better caching for dependencies)
+COPY frontend/package.json frontend/yarn.lock* frontend/pnpm-lock.yaml* ./
+
+# Install deps (use pnpm/yarn/npm depending on your lockfile)
+RUN if [ -f "./yarn.lock" ]; then yarn install; \
+    elif [ -f "./pnpm-lock.yaml" ]; then pnpm install; \
+    else npm install; \
+    fi
+
+# Copy all frontend code
+COPY frontend/ .
+
+# Build production static assets with Vite
+RUN yarn build || npm run build || pnpm build
