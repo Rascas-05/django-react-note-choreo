@@ -157,7 +157,9 @@ DATABASES = {
         "PASSWORD": os.environ.get("DB_PWD"),
         "HOST": os.environ.get("DB_HOST"),
         "PORT": os.environ.get("DB_PORT"),
-    } 
+        "CONN_MAX_AGE": 600,
+        "OPTIONS": {"sslmode": "require"},  # Uncomment if SSL is required
+    }
 }
 
 # Check PORT
@@ -182,9 +184,24 @@ USE_TZ = True
 # ------------------------------------
 # Static files
 # ------------------------------------
-STATIC_URL = "static/"
-
+STATIC_URL = "/static/"
+STATIC_ROOT = os.path.join(BASE_DIR, "staticfiles")
 # ------------------------------------
 # Default primary key
 # ------------------------------------
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
+
+# Optional logging (helps on Choreo logs)
+LOGGING = {
+    "version": 1,
+    "disable_existing_loggers": False,
+    "handlers": {
+        "console": {
+            "class": "logging.StreamHandler",
+        },
+    },
+    "root": {
+        "handlers": ["console"],
+        "level": os.environ.get("DJANGO_LOG_LEVEL", "INFO"),
+    },
+}
