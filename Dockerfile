@@ -1,52 +1,51 @@
-# Stage 1: Build the frontend with Node
+# ================================
+# Stage 1: Build React frontend
+# ================================
 FROM node:22.15.0-alpine AS builder
 
-# Set working directory
-WORKDIR /app
+# Work inside frontend directory
+WORKDIR /app/frontend
 
-# Copy dependency files first (for build caching)
-COPY package*.json yarn.lock* pnpm-lock.yaml* ./
+# Copy only package files to install deps
+COPY frontend/package.json frontend/yarn.lock ./
+RUN yarn install --frozen-lockfile
 
-# Install dependencies (auto-detect package manager)
-RUN npm install -g pnpm && \
-    if [ -f "./package-lock.json" ]; then npm ci --only=production; \
-    elif [ -f "./yarn.lock" ]; then yarn install --frozen-lockfile; \
-    elif [ -f "./pnpm-lock.yaml" ]; then pnpm install --frozen-lockfile; \
-    else npm install; fi
-
-# Copy the rest of the source code
-COPY . .
-
-# Build the Vite application (outputs to /app/dist)
+# Copy full frontend source and build
+COPY frontend/ ./
 RUN yarn build
 
-# Stage 2: Serve with Nginx
-FROM choreoanonymouspullable.azurecr.io/nginxinc/nginx-unprivileged:stable-alpine-slim
 
-# Required envs (Choreo style)
-ENV ENABLE_PERMISSIONS=TRUE
-ENV DEBUG_PERMISSIONS=TRUE
+# ================================
+# Stage 2: Django + Gunicorn + Nginx
+# ================================
+FROM python:3.11-slim AS final
 
-# Copy nginx configuration
-COPY --from=builder /app/default.conf /etc/nginx/conf.d/default.conf
+# Install system deps: build tools + nginx
+RUN apt-get update && apt-get install -y \
+    build-essential \
+    libpq-dev \
+    nginx \
+    && rm -rf /var/lib/apt/lists/*
 
-# Copy built frontend
-COPY --from=builder /app/dist /usr/share/nginx/html/
+# App directory
+WORKDIR /app
 
-# Switch to root only for fixing ownership
-USER root
-RUN chown -R 10015:10015 /usr/share/nginx/html/ && \
-    chmod -R 755 /usr/share/nginx/html/
+# Copy and install Python requirements
+COPY requirements.txt ./
+RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install gunicorn
 
-# ✅ Explicit UID (passes CKV_CHOREO_1)
-USER 10015
+# Copy Django backend source code
+COPY . .
 
-# Expose the default unprivileged nginx port
-EXPOSE 8080
+# Copy React build output into static/
+COPY --from=builder /app/frontend/dist ./static/
 
-# Health check
-HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
-    CMD curl -f http://localhost:8080/ || exit 1
+# Copy Nginx config
+COPY nginx-combined.conf /etc/nginx/conf.d/default.conf
 
-# Start nginx
-CMD ["nginx", "-g", "daemon off;"]
+# Expose both Django (8000) and Nginx (80)
+EXPOSE 8000 80
+
+# Run nginx and Django (Gunicorn)
+CMD service nginx start && gunicorn --bind 0.0.0.0:8000 your_project.wsgi:application
