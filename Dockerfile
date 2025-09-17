@@ -35,7 +35,8 @@ ENV GROUP_NGINX=10015
 COPY --from=builder /app/default.conf /etc/nginx/conf.d/default.conf
 
 # Copy built frontend files from builder stage
-COPY --from=builder /app/dist /usr/share/nginx/html/
+#COPY --from=builder /app/dist /usr/share/nginx/html/
+RUN ln -sf /app/public/ /usr/share/nginx/html/
 
 # Ensure proper ownership and permissions
 USER root
