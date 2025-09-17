@@ -1,11 +1,15 @@
 # Stage 1: Build the frontend with Node
 FROM node:22.15.0-alpine AS builder
 
-# Set working directory
-WORKDIR /app
+# Work inside frontend directory
+WORKDIR /app/frontend
+
+# Copy only package files to install deps
+COPY frontend/package.json frontend/yarn.lock ./
+RUN yarn install --frozen-lockfile
 
 # Copy dependency files first (for build caching)
-COPY package*.json yarn.lock* pnpm-lock.yaml* ./
+#COPY package*.json yarn.lock* pnpm-lock.yaml* ./
 
 # Install dependencies (auto-detect package manager)
 RUN npm install -g pnpm && \
