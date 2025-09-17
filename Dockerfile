@@ -1,22 +1,14 @@
-### Stage 1: Build Vite frontend
-FROM node:22-alpine AS builder
+### Stage 1: Build
+FROM node:22.15.0-alpine AS builder
 
 WORKDIR /app/frontend
 
-# Install pnpm in case some deps use it
 RUN npm install -g pnpm
 
-# Copy only frontend sources (keeps image smaller)
 COPY frontend/ ./
 
-# Install deps (lockfile aware)
-RUN if [ -f "package-lock.json" ]; then npm ci; \
-    elif [ -f "yarn.lock" ]; then yarn install --frozen-lockfile; \
-    elif [ -f "pnpm-lock.yaml" ]; then pnpm install --frozen-lockfile; \
-    fi
-
-# Build for production (Vite → dist/)
-RUN yarn build || npm run build || pnpm build
+# use yarn since you’ve got a yarn.lock
+RUN yarn install --frozen-lockfile && yarn build
 
 ### Stage 2: Serve with nginx
 FROM choreoanonymouspullable.azurecr.io/nginxinc/nginx-unprivileged:stable-alpine-slim
@@ -26,10 +18,10 @@ ENV DEBUG_PERMISSIONS=TRUE
 ENV USER_NGINX=10015
 ENV GROUP_NGINX=10015
 
-# Copy custom nginx config if available
+# Copy nginx config if provided
 COPY --from=builder /app/frontend/default.conf /etc/nginx/conf.d/default.conf
 
-# Serve built dist folder
+# Copy the Vite dist/ output, not build/
 COPY --from=builder /app/frontend/dist /usr/share/nginx/html/
 
 USER nginx
