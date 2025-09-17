@@ -17,15 +17,19 @@ RUN yarn install --frozen-lockfile && yarn build
 ### -------------------------
 ### Stage 2: Build Backend (Django)
 ### -------------------------
-FROM python:3.11-slim AS backend-builder
+FROM python:3.11-slim-bullseye AS backend-builder
 
 WORKDIR /app
 
-# Install system dependencies
-RUN apt-get update && apt-get install -y \
+# Install system dependencies and update packages to latest security patches
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
     build-essential \
-    libpq-dev \
-    && rm -rf /var/lib/apt/lists/*
+    libpq-dev && \
+    apt-get dist-upgrade -y && \
+    apt-get autoremove -y && \
+    apt-get clean && \
+    rm -rf /var/lib/apt/lists/*
 
 # Copy requirements and install Python deps
 COPY requirements.txt .
@@ -59,7 +63,8 @@ COPY --from=backend-builder /usr/local/bin/ /usr/local/bin/
 COPY --from=backend-builder /app/ /app/
 
 # Copy built frontend to nginx html directory
-COPY --from=frontend-builder /app/frontend/dist /usr/share/nginx/html/
+#COPY --from=frontend-builder /app/frontend/dist /usr/share/nginx/html/
+COPY --from=builder /app/dist /usr/share/nginx/html/
 
 # Copy nginx config for SPA + API proxy
 COPY nginx-combined.conf /etc/nginx/sites-available/default
