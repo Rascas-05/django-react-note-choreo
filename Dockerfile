@@ -1,83 +1,56 @@
-### -------------------------
-### Stage 1: Build Frontend (Vite)
-### -------------------------
-FROM node:22-alpine AS frontend-builder
+# Multi-stage build for React/Vite frontend with Nginx
 
-WORKDIR /app/frontend
+# Stage 1: Build the frontend
+FROM node:22.15.0-alpine AS builder
 
-# Install pnpm globally
-RUN npm install -g pnpm
-
-# Copy frontend source
-COPY frontend/ ./
-
-# Install deps and build
-RUN yarn install --frozen-lockfile && yarn build
-
-### -------------------------
-### Stage 2: Build Backend (Django)
-### -------------------------
-FROM python:3.11-slim-bullseye AS backend-builder
-
+# Set working directory
 WORKDIR /app
 
-# Install system dependencies and update packages to latest security patches
-RUN apt-get update && \
-    apt-get install -y --no-install-recommends \
-    build-essential \
-    libpq-dev && \
-    apt-get dist-upgrade -y && \
-    apt-get autoremove -y && \
-    apt-get clean && \
-    rm -rf /var/lib/apt/lists/*
+# Copy package files first for better caching
+COPY package*.json yarn.lock* pnpm-lock.yaml* ./
 
-# Copy requirements and install Python deps
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+# Install package manager and dependencies
+RUN npm install -g pnpm && \
+    if [ -f "./package-lock.json" ]; then npm ci --only=production; \
+    elif [ -f "./yarn.lock" ]; then yarn install --frozen-lockfile; \
+    elif [ -f "./pnpm-lock.yaml" ]; then pnpm install --frozen-lockfile; \
+    else npm install; fi
 
-# Copy Django source
+# Copy source code
 COPY . .
 
-# Collect static files (Django admin, etc.)
-RUN python manage.py collectstatic --noinput
+# Build the application (outputs to /app/dist)
+RUN yarn build
 
-### -------------------------
-### Stage 3: Production (nginx + Django)
-### -------------------------
-FROM python:3.11-slim
+# Stage 2: Serve with Nginx
+FROM choreoanonymouspullable.azurecr.io/nginxinc/nginx-unprivileged:stable-alpine-slim
 
-WORKDIR /app
+# Set environment variables for permissions
+ENV ENABLE_PERMISSIONS=TRUE
+ENV DEBUG_PERMISSIONS=TRUE
+ENV USER_NGINX=10015
+ENV GROUP_NGINX=10015
 
-# Install runtime dependencies
-RUN apt-get update && apt-get install -y \
-    nginx \
-    libpq5 \
-    supervisor \
-    && rm -rf /var/lib/apt/lists/*
+# Copy nginx configuration
+COPY --from=builder /app/default.conf /etc/nginx/conf.d/default.conf
 
-# Copy Python dependencies from backend builder
-COPY --from=backend-builder /usr/local/lib/python3.11/site-packages/ /usr/local/lib/python3.11/site-packages/
-COPY --from=backend-builder /usr/local/bin/ /usr/local/bin/
+# Copy built frontend files from builder stage (FIXED: /app/dist not /app/frontend/build)
+COPY --from=builder /app/dist /usr/share/nginx/html/
 
-# Copy Django app
-COPY --from=backend-builder /app/ /app/
+# Ensure proper ownership and permissions
+USER root
+RUN chown -R ${USER_NGINX}:${GROUP_NGINX} /usr/share/nginx/html/ && \
+    chmod -R 755 /usr/share/nginx/html/
 
-# Copy built frontend to nginx html directory
-COPY --from=frontend-builder /app/frontend/dist /usr/share/nginx/html/
+# Switch back to nginx user
+USER nginx
 
-# Copy nginx config for SPA + API proxy
-COPY nginx-combined.conf /etc/nginx/sites-available/default
-
-# Copy supervisor config to manage both services
-COPY supervisord.conf /etc/supervisor/conf.d/supervisord.conf
-
-# Create nginx user and set permissions
-RUN chown -R www-data:www-data /usr/share/nginx/html/ \
-    && chown -R www-data:www-data /var/log/nginx/ \
-    && chown -R www-data:www-data /var/lib/nginx/
-
-# Expose port
+# Expose port 8080 (nginx-unprivileged default)
 EXPOSE 8080
 
-# Start supervisor (manages nginx + Django)
-CMD ["/usr/bin/supervisord", "-c", "/etc/supervisor/conf.d/supervisord.conf"]
+# Health check
+HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
+    CMD curl -f http://localhost:8080/ || exit 1
+
+# Start nginx
+CMD ["nginx", "-g", "daemon off;"]
