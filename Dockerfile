@@ -35,6 +35,11 @@ RUN python manage.py collectstatic --noinput
 # Change permissions
 RUN chown -R app:app /app
 USER app
+# Create non-root user with UID 10001 - Otherwise Choreo build fails
+RUN adduser -u 10001 --disabled-password --gecos "" appuser
+
+# Switch to that user
+USER 10001
 
 EXPOSE 8000
 CMD ["gunicorn", "myproject.wsgi:application", "--bind", "0.0.0.0:8000"]
