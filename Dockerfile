@@ -1,5 +1,5 @@
 # Stage 1: Build React frontend
-FROM node:18 as frontend-builder
+FROM node:20.19.1-bullseye-slim as frontend-builder
 WORKDIR /frontend
 COPY frontend/package*.json ./
 RUN npm install --legacy-peer-deps
@@ -23,8 +23,11 @@ RUN apt-get update && apt-get install -y \
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
+# Copy backend explicitly (instead of `.`, which may mix frontend files)
+COPY backend/ . 
+
 # Copy Django project
-COPY . .
+#COPY . .
 
 # Copy built React static files into Django static dir
 COPY --from=frontend-builder /frontend/dist ./frontend_dist
